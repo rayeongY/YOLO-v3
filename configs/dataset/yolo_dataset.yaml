@@ -1,0 +1,5 @@
+DATASET:
+  NAME: "yolo-dataset"
+  ROOT: "./datasets/yolo-dataset"
+  CLASSES: {  "선박": 0, "부표": 1, "어망부표": 2,
+              "해상풍력": 3, "등대": 4, "기타부유물": 5  }
