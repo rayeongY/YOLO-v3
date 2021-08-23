@@ -23,9 +23,9 @@ class YoloDataset(Dataset):
         dataset_name = dataset_option["DATASET"]["NAME"]
 
         assert split == "train" or split == "valid"
-        assert dataset_name in ["yolo-dataset"]
+        assert dataset_name in ["ship", "yolo-dataset"]
                 
-        if dataset_name == "yolo-dataset":
+        if dataset_name == "yolo-dataset" or dataset_name == "ship":
             if split == "train":
                 dataset_type = "train"
             elif split == "valid":
@@ -80,8 +80,8 @@ class YoloDataset(Dataset):
             ## (1) Set objectness score
             ## . . . . before then, we should find (the correct cell_offset(Si: cy, Sj: cx) & the best-fitted anchor(Ai: pw, ph))
             ## . . . .                          -- where g.t. bbox(from label) be assigned
-            ## . . . . => label_maps[idx of Scale: anchor assigned][idx of Anchor][Si][Sj][4] = 1 ----- case of Best
-            ## . . . . => label_maps[idx of Scale: anchor assigned][idx of Anchor][Si][Sj][4] = -1 ---- case of Non-best (to be ignored)
+            ## . . . . => label_maps[idx of Scale: anchor assigned][idx of Anchor, Si, Sj, 4] = 1 ----- case of Best
+            ## . . . . => label_maps[idx of Scale: anchor assigned][idx of Anchor, Si, Sj, 4] = -1 ---- case of Non-best (to be ignored)
             ## . . . . => DEFAULT = 0 ----------------------------------------------------------------- case of No-assigned
             ## 
             ## . . (1-1) How evaluate the "goodness" of anchor box
@@ -93,8 +93,38 @@ class YoloDataset(Dataset):
             wh_IOUs = width_height_IOU(anchors_wh, gtBBOX_wh)
 
             anchor_indices = wh_IOUs.argsort(descending=True, dim=0)
+
+            ## Flag list for checking whether other anchor has been already picked in the scale
+            is_scale_occupied = [False] * 3
+
             for anchor_index in anchor_indices:
-                continue            
+                anchor = anchors[anchor_index]
+
+                ## To mark the anchor
+                ## . . (1) Get information of the anchor BBOX
+                scale_idx = anchor_index // len(scales)
+                anch_idx_in_scale = anchor_index % len(scales)
+
+                ## . . (2) then, Get cell information(Si: cy, Sj: cx) of the g.t.BBOX
+                grid = 608 // scales[scale_idx]
+                cx = bx // grid          ## .....??
+                cy = by // grid
+                gt_tx = bx - cx * grid
+                gt_ty = by - cy * grid
+                gtBBOX[0:2] = gt_tx, gt_ty
+
+                ## Get record of the cell information in the scale
+                ## . . to avoid overlapping bboxes
+                is_cell_occupied = label_maps[scale_idx][anch_idx_in_scale, cy, cx,  4]
+
+                if not is_cell_occupied and not is_scale_occupied[scale_idx]:       ## if there is no other overlapping-liked bbox and I'm the best
+                    label_maps[scale_idx][anch_idx_in_scale, cy, cx,  4] = 1
+                    label_maps[scale_idx][anch_idx_in_scale, cy, cx, :4] = gtBBOX
+                    label_maps[scale_idx][anch_idx_in_scale, cy, cx, 5:] = obj_ids
+                    is_scale_occupied[scale_idx] = True                             ## the best-fitted anchor has been picked in this scale
+                
+                elif wh_IOUs[anchor_index] > 0.5:
+                    label_maps[scale_idx][anch_idx_in_scale, cy, cx,  4] = -1        ## this anchor is not the best, so we will ignore it
 
 
         return img, tuple(label_maps), img_path
