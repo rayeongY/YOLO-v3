@@ -1,0 +1,6 @@
+DATASET:
+  NAME: "ship"
+  ROOT: "C:/Users/ryyoon/MA_MSS/ship-tracking/datasets/ship"
+  CLASSES: {  "선박": 0, "부표": 1, "어망부표": 1,
+              "해상풍력": 1, "등대": 1, "기타부유물" : 1 }
+  NUM_CLASSES: 2

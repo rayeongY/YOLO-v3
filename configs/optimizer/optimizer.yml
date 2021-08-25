@@ -1,0 +1,5 @@
+OPTIMIZER:
+  METHOD: "adam"
+  BATCH_SIZE: 4
+  EPOCHS: 1
+  LR: 0.0001
