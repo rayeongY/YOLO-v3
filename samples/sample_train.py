@@ -31,7 +31,7 @@ def train(
     scales = torch.tensor(model_option["YOLOv3"]["SCALES"]).to(device)       ## [13, 26, 52]
     anchors = torch.tensor(model_option["YOLOv3"]["ANCHORS"]).to(device)
 
-    for i, (batch_img, batch_label, batch_img_path) in tqdm(enumerate(train_loader, 0), desc="train"):
+    for i, (batch_img, batch_label, batch_img_path) in enumerate(tqdm(train_loader, desc="train")):
         n_iteration = (optimizer_option["OPTIMIZER"]["ITERS_PER_EPOCH"] * epoch) + i
 
         batch_img = batch_img.to(device)
@@ -71,16 +71,18 @@ def valid(
     true_pred_num = 0
     gt_num = 0
 
-    scales = torch.tensor(model_option["YOLOv3"]["SCALES"]).to(device)       ## [13, 26, 52]
-    anchors = torch.tensor(model_option["YOLOv3"]["ANCHORS"]).to(device)
+    # scales = torch.tensor(model_option["YOLOv3"]["SCALES"]).to(device)       ## [19, 38, 76]
+    # anchors = torch.tensor(model_option["YOLOv3"]["ANCHORS"]).to(device)
 
-    for i, (batch_img, batch_label, batch_img_path) in tqdm(enumerate(valid_loader, 0), desc="valid"):
+    for i, (batch_img, batch_label, batch_img_path) in enumerate(tqdm(valid_loader, desc="valid")):
         batch_img = batch_img.to(device)
         batch_label = batch_label.to(device)
         
         pred = model(batch_img)
 
         ## Post-Processing?
+        ## https://nrsyed.com/2020/04/28/a-pytorch-implementation-of-yolov3-for-real-time-object-detection-part-1/
+
 
         ## Get the number of both true predictions and ground truth
 

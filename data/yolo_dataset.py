@@ -18,12 +18,10 @@ class YoloDataset(Dataset):
         self.dataset_option = dataset_option
         self.model_option = model_option
         self.classes = self.dataset_option["DATASET"]["CLASSES"]
-
         
         dataset_name = dataset_option["DATASET"]["NAME"]
 
         assert split == "train" or split == "valid"
-        
         assert dataset_name in ["ship", "yolo-dataset"]
                 
         if dataset_name == "yolo-dataset" or dataset_name == "ship":
@@ -90,7 +88,8 @@ class YoloDataset(Dataset):
             ## . . . . . => Pick the anchBOX in descending order with whIOU value
             anchors_wh = torch.tensor(anchors).reshape(-1, 2)         ## (3, 3, 2) -> (9, 2)
             gtBBOX_wh = torch.tensor(gtBBOX[2:4])
-            wh_IOUs = width_height_IOU(anchors_wh, gtBBOX_wh)
+            wh_IOUs = width_height_IOU(anchors_wh, gtBBOX_wh)         ## https://github.com/aladdinpersson/Machine-Learning-Collection/blob/master/ML/Pytorch/object_detection/YOLOv3/dataset.py#:~:text=iou_anchors%20%3D%20iou(torch.tensor(box%5B2%3A4%5D)%2C%20self.anchors)
+                                                                      ## https://github.com/developer0hye/YOLOv3Tiny/blob/c918fdba0181f5b21edb99bf42de211f69aad254/model.py#:~:text=iou%20%3D%20compute_iou(anchor_boxes%2C%20target_bbox%5B%3A%2C%203%3A%5D%2C%20bbox_format%3D%22wh%22)
 
             anchor_indices = wh_IOUs.argsort(descending=True, dim=0)
 
@@ -119,7 +118,7 @@ class YoloDataset(Dataset):
                 if not is_cell_occupied and not is_scale_occupied[scale_idx]:       ## if there is no other overlapping-liked bbox and I'm the best
                     label_maps[scale_idx][anch_idx_in_scale, cy, cx,  4] = 1
                     label_maps[scale_idx][anch_idx_in_scale, cy, cx, :4] = torch.tensor(gtBBOX)
-                    label_maps[scale_idx][anch_idx_in_scale, cy, cx, 5:] = torch.tensor(obj_ids)
+                    label_maps[scale_idx][anch_idx_in_scale, cy, cx, 5:] = torch.tensor(obj_vec)
                     is_scale_occupied[scale_idx] = True                             ## the best-fitted anchor has been picked in this scale
                 
                 elif wh_IOUs[anchor_index] > 0.5:
