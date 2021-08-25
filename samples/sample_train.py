@@ -35,13 +35,12 @@ def train(
         n_iteration = (optimizer_option["OPTIMIZER"]["ITERS_PER_EPOCH"] * epoch) + i
 
         batch_img = batch_img.to(device)
-        batch_label = (batch_label[0].to(device), batch_label[1].to(device), batch_label[2].to(device))
+        batch_label = [label.to(device) for label in batch_label]
         
         #################
         ##  FORWARDING ##
         #################
         pred = model(batch_img)                                                       ### batch_img: tensor(   N, 3, 608, 608) . . . . . . . . . . . N = batch_size
-        pred = pred.data.cpu().numpy()
         loss = ( loss_func(pred[2], batch_label[0], scales[0], anchors=anchors[0])    ######## pred: tensor(3, N, 3, S, S, 1 + 4 + class_offset) . . S = scale_size
                + loss_func(pred[1], batch_label[1], scales[1], anchors=anchors[1])    # batch_label: tensor(3, N, 3, S, S, 1 + 4 + class_offset)
                + loss_func(pred[0], batch_label[2], scales[2], anchors=anchors[2]) )  ##### anchors: tensor(3,    3,       2) . . . is list of pairs(anch_w, anch_h)
@@ -116,8 +115,8 @@ if __name__ == "__main__":
     ######################
     train_set_num, train_loader, valid_loader = build_DataLoader(dataset_option, model_option, optimizer_option)
 
-    device = torch.device('cpu')
-    # device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    # device = torch.device('cpu')
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     ###########################
     ## BUILD MODEL & LOSS_fn ##

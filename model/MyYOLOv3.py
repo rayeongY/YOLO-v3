@@ -41,6 +41,8 @@ class YOLOv3Loss(nn.Module):
                + is_obj_loss.sum() / is_obj_loss.shape[0]
                 + coord_loss.sum() / coord_loss.shape[0]
                 + class_loss.sum() / class_loss.shape[0] )
+
+        loss /= 4
                
         return loss
 

@@ -172,7 +172,7 @@ def collate_fn(batch):
         labels_1 = torch.stack(labels_1, 0)
         labels_2 = torch.stack(labels_2, 0)
         labels_3 = torch.stack(labels_3, 0)
-        img_labels = (labels_1, labels_2, labels_3)
+        img_labels = [labels_1, labels_2, labels_3]
 
         return img_files, img_labels, img_paths
 
