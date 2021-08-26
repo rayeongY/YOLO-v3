@@ -32,10 +32,10 @@ class YOLOv3Loss(nn.Module):
         target[..., 0:4] = torch.cat([            target[..., :2] ,        (target[..., 2:4] / anchors)], dim=4)
         
     
-        no_obj_loss = self.get_loss(pred[...,  4][no_assigned], target[...,  4][no_assigned], opt="NO_OBJ")
-        is_obj_loss = self.get_loss(pred[...,  4][is_assigned], target[...,  4][is_assigned], opt="IS_OBJ")
-        coord_loss =  self.get_loss(pred[..., :4][is_assigned], target[..., :4][is_assigned], opt="COORD")
-        class_loss =  self.get_loss(pred[..., 5:][is_assigned], target[..., 5:][is_assigned], opt="CLASS")
+        no_obj_loss = self.get_loss(pred[..., 4:5][no_assigned], target[..., 4:5][no_assigned], opt="NO_OBJ")
+        is_obj_loss = self.get_loss(pred[..., 4:5][is_assigned], target[..., 4:5][is_assigned], opt="IS_OBJ")
+        coord_loss =  self.get_loss(pred[..., 0:4][is_assigned], target[..., 0:4][is_assigned], opt="COORD")
+        class_loss =  self.get_loss(pred[..., 5: ][is_assigned], target[..., 5: ][is_assigned], opt="CLASS")
         
         loss = ( no_obj_loss.sum() / no_obj_loss.shape[0]
                + is_obj_loss.sum() / is_obj_loss.shape[0]
