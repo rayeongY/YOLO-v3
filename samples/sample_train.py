@@ -267,7 +267,7 @@ def valid(
         epoch,
         logger
         ):
-    model.eval()
+    # model.eval()
     true_pred_num = 0
     gt_num = 0
 
@@ -276,7 +276,7 @@ def valid(
 
     for i, (batch_img, batch_label, batch_img_path) in enumerate(tqdm(valid_loader, desc="valid")):
         batch_img = batch_img.to(device)
-        batch_label = batch_label.to(device)
+        batch_label = [label.to(device) for label in batch_label]
         batch_size = len(batch_img_path)
         
         pred = model(batch_img)
@@ -284,6 +284,7 @@ def valid(
         ## Post-Processing?
         ## https://nrsyed.com/2020/04/28/a-pytorch-implementation-of-yolov3-for-real-time-object-detection-part-1/
         for i in range(scales.shape[0]):
+            
             scale = pred[i].shape[-1]
 
             pred[i] = pred[i].reshape(1, 3, 85, scale, scale)
@@ -295,23 +296,23 @@ def valid(
             pred_x = torch.sigmoid(pred[i][..., 0:1]) + x_cell_offset
             pred_y = torch.sigmoid(pred[i][..., 1:2]) + y_cell_offset
             pred_wh = torch.exp(pred[i][..., 2:4]) * anchors[i].unsqueeze(0).unsqueeze(0).reshape((1, 3, 1, 1, 2))
-            pred_confi = torch.sigmoid(pred[..., 4:5])
-            pred_obj = torch.argsort(pred[i][..., 5:])[0]
+            pred_confi = torch.sigmoid(pred[i][..., 4:5])
+            pred_obj = torch.argmax(pred[i][..., 5:], dim=-1).unsqueeze(-1)
 
-            pred[i] = torch.cat((pred_x, pred_y, pred_wh, pred_confi, pred_obj), dim=1)
+            pred[i] = torch.cat((pred_x, pred_y, pred_wh, pred_confi, pred_obj), dim=-1)
 
         surpressed_pred = NMS(batch_size, pred)
 
         ## Get the number of both true predictions and ground truth
         # for s_pred, label in zip(surpressed_pred, batch_label):
         #     gt_num += batch_label.shape[0]
-
+        
 
         ## Get the number of both true predictions and ground truth
 
 
     ## Examine Accuracy
-    acc = (true_pred_num / gt_num + 1e-16) * 100
+    acc = (true_pred_num / (gt_num + 1e-16)) * 100
     logger.add_scalar('test/acc', acc, epoch)
 
     return acc

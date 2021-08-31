@@ -26,7 +26,7 @@ class YoloDataset(Dataset):
                 
         if dataset_name == "yolo-dataset" or dataset_name == "ship":
             if split == "train":
-                dataset_type = "train"
+                dataset_type = "valid"
             elif split == "valid":
                 dataset_type = "valid"
 
@@ -70,8 +70,8 @@ class YoloDataset(Dataset):
             bx, by, bw, bh = gtBBOX
             
             ## (2) Create one-hot vector with list of object ids
-            obj_vec = [0] * class_offset
-            obj_vec[int(obj_ids)] = 1
+            obj_vec = [0.] * class_offset
+            obj_vec[int(obj_ids)] = 1.
             # for obj_id in obj_ids:
             #     obj_vec[int(obj_id)] = 1
 
@@ -116,13 +116,13 @@ class YoloDataset(Dataset):
                 is_cell_occupied = label_maps[scale_idx][anch_idx_in_scale, cy, cx,  4]
 
                 if not is_cell_occupied and not is_scale_occupied[scale_idx]:       ## if there is no other overlapping-liked bbox and I'm the best
-                    label_maps[scale_idx][anch_idx_in_scale, cy, cx, 4:5] = 1
-                    label_maps[scale_idx][anch_idx_in_scale, cy, cx, 0:4] = torch.tensor(gtBBOX)
+                    label_maps[scale_idx][anch_idx_in_scale, cy, cx, 4:5] = 1.
+                    label_maps[scale_idx][anch_idx_in_scale, cy, cx, 0:4] = torch.tensor(gtBBOX).float()
                     label_maps[scale_idx][anch_idx_in_scale, cy, cx, 5:] = torch.tensor(obj_vec)
                     is_scale_occupied[scale_idx] = True                             ## the best-fitted anchor has been picked in this scale
                 
                 elif wh_IOUs[anchor_index] > 0.5:
-                    label_maps[scale_idx][anch_idx_in_scale, cy, cx, 4:5] = -1        ## this anchor is not the best, so we will ignore it
+                    label_maps[scale_idx][anch_idx_in_scale, cy, cx, 4] = -1        ## this anchor is not the best, so we will ignore it
 
         return img_file, label_maps, img_path
 
