@@ -44,14 +44,14 @@ def coord_IOU(box_1, box_2, opt="center"):
     iou = i / u
     return iou
 
-def NMS(batch_size, pred):
+def NMS(pred, batch_size):
     surpressed_pred = []
 
     for batch_idx in range(batch_size):
         each_pred = [pred[0][batch_idx], pred[1][batch_idx], pred[2][batch_idx]]        ## [tensor(255, 76, 76), tensor(255, 38, 38), tensor(255, 19, 19)]
 
-        for i in range(3):
-            each_pred[i] = each_pred[i].reshape(-1, each_pred[i].shape[-1])            
+        # for i in range(3):
+        #     each_pred[i] = each_pred[i].reshape(-1, each_pred[i].shape[-1])            
         each_pred = torch.cat(each_pred, dim=0)        ## pred = tensor(22743, 6)
         
         is_object = each_pred[..., 4] > 0.15      ## 0.15: nominal probability threshold --- https://nrsyed.com/2020/04/28/a-pytorch-implementation-of-yolov3-for-real-time-object-detection-part-1/#:~:text=By%20filtering%20out%20detections%20below%20some%20nominal%20probability%20threshold%20(e.g.%2C%200.15)%2C%20we%20eliminate%20most%20of%20the%20false%20positives.
