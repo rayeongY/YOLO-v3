@@ -24,7 +24,7 @@ class YOLOv3Loss(nn.Module):
         ## class_loss(Classification Loss): Loss for predicted class-ids   of     object-assigned BBOXes 
         
         is_assigned = target[..., 4] == 1     ## tensor([(element == 1) for element in 4th column of target])   ## e.g. tensor([True, False, False, ...])
-        no_assigned = target[..., 4] == 0     ## If use these boolean-list tensor as a indices,
+        no_assigned = target[..., 4] == 0     ## If use these boolean-list tensor as indices,
                                               ##    we can extract the only rows from target(label) tensor -- whose 4th column element(objectness score) is 1-or-0
 
 

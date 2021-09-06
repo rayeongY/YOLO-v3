@@ -1,6 +1,7 @@
 *.pyc
 *.pth
 .vscode/
+workspace.code-workspace
 configs/darknet/*
 model/darknet2pytorch.py
 notebooks/runs/*
@@ -9,6 +10,8 @@ samples/runs/*
 weights/
 
 
+archive/*
+studying/*
 VOCdataset/
 VOCdataset
 *.pth
