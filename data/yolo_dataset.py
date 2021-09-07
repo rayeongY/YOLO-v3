@@ -26,7 +26,7 @@ class YoloDataset(Dataset):
                 
         if dataset_name == "yolo-dataset" or dataset_name == "ship":
             if split == "train":
-                dataset_type = "train"
+                dataset_type = "valid"
             elif split == "valid":
                 dataset_type = "valid"
 
@@ -53,78 +53,80 @@ class YoloDataset(Dataset):
             labels = np.loadtxt(label_f, dtype="float")
             labels = labels.reshape(-1, 5)
 
-        #############################################################################################
-        ## transform "labels" - from np.shape(_, 5) to tensor(#ofS=3, A=3, S, S, 5 + class_offset) ##
-        ## i.e., (1) add objectness score, (2) apply one-hot encoding to object ids                ##
-        #############################################################################################
-        num_anchors = self.model_option["YOLOv3"]["NUM_ANCHORS"]
-        anchors = self.model_option["YOLOv3"]["ANCHORS"]
-        scales = self.model_option["YOLOv3"]["SCALES"]
-        class_offset = 80
-        # class_offset = self.dataset_option["DATASET"]["NUM_CLASSES"]
+        # #############################################################################################
+        # ## transform "labels" - from np.shape(_, 5) to tensor(#ofS=3, A=3, S, S, 5 + class_offset) ##
+        # ## i.e., (1) add objectness score, (2) apply one-hot encoding to object ids                ##
+        # #############################################################################################
+        # num_anchors = self.model_option["YOLOv3"]["NUM_ANCHORS"]
+        # anchors = self.model_option["YOLOv3"]["ANCHORS"]
+        # scales = self.model_option["YOLOv3"]["SCALES"]
+        # class_offset = 80
+        # # class_offset = self.dataset_option["DATASET"]["NUM_CLASSES"]
 
-        ##           tensor([# of S]=3,  [# of A]=3,     S,     S, 5 + class_offset)
-        label_maps = [torch.zeros((num_anchors // 3, scale, scale, 5 + class_offset)) for scale in scales]
-        for label in labels:
-            obj_ids, gtBBOX = label[0], label[1:5]
-            bx, by, bw, bh = gtBBOX
+        # ##           tensor([# of S]=3,  [# of A]=3,     S,     S, 5 + class_offset)
+        # label_maps = [torch.zeros((num_anchors // 3, scale, scale, 5 + class_offset)) for scale in scales]
+        # for label in labels:
+        #     obj_ids, gtBBOX = label[0], label[1:5]
+        #     bx, by, bw, bh = gtBBOX
             
-            ## (2) Create one-hot vector with list of object ids
-            obj_vec = [0] * class_offset
-            obj_vec[int(obj_ids)] = 1
-            # for obj_id in obj_ids:
-            #     obj_vec[int(obj_id)] = 1
+        #     ## (2) Create one-hot vector with list of object ids
+        #     obj_vec = [0.] * class_offset
+        #     obj_vec[int(obj_ids)] = 1.
+        #     # for obj_id in obj_ids:
+        #     #     obj_vec[int(obj_id)] = 1
 
-            ## (1) Set objectness score
-            ## . . . . before then, we should find (the correct cell_offset(Si: cy, Sj: cx) & the best-fitted anchor(Ai: pw, ph))
-            ## . . . .                          -- where g.t. bbox(from label) be assigned
-            ## . . . . => label_maps[idx of Scale: anchor assigned][idx of Anchor, Si, Sj, 4] = 1 ----- case of Best
-            ## . . . . => label_maps[idx of Scale: anchor assigned][idx of Anchor, Si, Sj, 4] = -1 ---- case of Non-best (to be ignored)
-            ## . . . . => DEFAULT = 0 ----------------------------------------------------------------- case of No-assigned
-            ## 
-            ## . . (1-1) How evaluate the "goodness" of anchor box
-            ## . . . . .     is to compare "Similarity" between the anchor box and g.t. BBOX
-            ## . . . . . => Calculate "width-and-height-based IOU" between anchBOX and gtBBOX
-            ## . . . . . => Pick the anchBOX in descending order with whIOU value
-            anchors_wh = torch.tensor(anchors).reshape(-1, 2)         ## (3, 3, 2) -> (9, 2)
-            gtBBOX_wh = torch.tensor(gtBBOX[2:4])
-            wh_IOUs = width_height_IOU(anchors_wh, gtBBOX_wh)         ## https://github.com/aladdinpersson/Machine-Learning-Collection/blob/master/ML/Pytorch/object_detection/YOLOv3/dataset.py#:~:text=iou_anchors%20%3D%20iou(torch.tensor(box%5B2%3A4%5D)%2C%20self.anchors)
-                                                                      ## https://github.com/developer0hye/YOLOv3Tiny/blob/c918fdba0181f5b21edb99bf42de211f69aad254/model.py#:~:text=iou%20%3D%20compute_iou(anchor_boxes%2C%20target_bbox%5B%3A%2C%203%3A%5D%2C%20bbox_format%3D%22wh%22)
+        #     ## (1) Set objectness score
+        #     ## . . . . before then, we should find (the correct cell_offset(Si: cy, Sj: cx) & the best-fitted anchor(Ai: pw, ph))
+        #     ## . . . .                          -- where g.t. bbox(from label) be assigned
+        #     ## . . . . => label_maps[idx of Scale: anchor assigned][idx of Anchor, Si, Sj, 4] = 1 ----- case of Best
+        #     ## . . . . => label_maps[idx of Scale: anchor assigned][idx of Anchor, Si, Sj, 4] = -1 ---- case of Non-best (to be ignored)
+        #     ## . . . . => DEFAULT = 0 ----------------------------------------------------------------- case of No-assigned
+        #     ## 
+        #     ## . . (1-1) How evaluate the "goodness" of anchor box
+        #     ## . . . . .     is to compare "Similarity" between the anchor box and g.t. BBOX
+        #     ## . . . . . => Calculate "width-and-height-based IOU" between anchBOX and gtBBOX
+        #     ## . . . . . => Pick the anchBOX in descending order with whIOU value
+        #     anchors_wh = torch.tensor(anchors).reshape(-1, 2)         ## (3, 3, 2) -> (9, 2)
+        #     gtBBOX_wh = torch.tensor(gtBBOX[2:4])
+        #     wh_IOUs = width_height_IOU(anchors_wh, gtBBOX_wh)         ## https://github.com/aladdinpersson/Machine-Learning-Collection/blob/master/ML/Pytorch/object_detection/YOLOv3/dataset.py#:~:text=iou_anchors%20%3D%20iou(torch.tensor(box%5B2%3A4%5D)%2C%20self.anchors)
+        #                                                               ## https://github.com/developer0hye/YOLOv3Tiny/blob/c918fdba0181f5b21edb99bf42de211f69aad254/model.py#:~:text=iou%20%3D%20compute_iou(anchor_boxes%2C%20target_bbox%5B%3A%2C%203%3A%5D%2C%20bbox_format%3D%22wh%22)
 
-            anchor_indices = wh_IOUs.argsort(descending=True, dim=0)
+        #     anchor_indices = wh_IOUs.argsort(descending=True, dim=0)
 
-            ## Flag list for checking whether other anchor has been already picked in the scale
-            is_scale_occupied = [False] * 3
+        #     ## Flag list for checking whether other anchor has been already picked in the scale
+        #     is_scale_occupied = [False] * 3
 
-            for anchor_index in anchor_indices:
+        #     for anchor_index in anchor_indices:
 
-                ## To mark the anchor
-                ## . . (1) Get information of the anchor BBOX
-                scale_idx = torch.div(anchor_index, len(scales), rounding_mode='floor')
-                anch_idx_in_scale = anchor_index % len(scales)
+        #         ## To mark the anchor
+        #         ## . . (1) Get information of the anchor BBOX
+        #         scale_idx = torch.div(anchor_index, len(scales), rounding_mode='floor')
+        #         anch_idx_in_scale = anchor_index % len(scales)
 
-                ## . . (2) then, Get cell information(Si: cy, Sj: cx) of the g.t.BBOX
-                scale = scales[scale_idx]
-                cx = int(bx * scale)          ## .....??
-                cy = int(by * scale)
-                gt_tx = bx * scale - cx
-                gt_ty = by * scale - cy
-                gtBBOX[0:2] = gt_tx, gt_ty
+        #         ## . . (2) then, Get cell information(Si: cy, Sj: cx) of the g.t.BBOX
+        #         scale = scales[scale_idx]
+        #         cx = int(bx * scale)          ## .....??
+        #         cy = int(by * scale)
+        #         gt_tx = bx * scale - cx
+        #         gt_ty = by * scale - cy
+        #         gtBBOX[0:2] = gt_tx, gt_ty
 
-                ## Get record of the cell information in the scale
-                ## . . to avoid overlapping bboxes
-                is_cell_occupied = label_maps[scale_idx][anch_idx_in_scale, cy, cx,  4]
+        #         ## Get record of the cell information in the scale
+        #         ## . . to avoid overlapping bboxes
+        #         is_cell_occupied = label_maps[scale_idx][anch_idx_in_scale, cy, cx,  4]
 
-                if not is_cell_occupied and not is_scale_occupied[scale_idx]:       ## if there is no other overlapping-liked bbox and I'm the best
-                    label_maps[scale_idx][anch_idx_in_scale, cy, cx, 4:5] = 1
-                    label_maps[scale_idx][anch_idx_in_scale, cy, cx, 0:4] = torch.tensor(gtBBOX)
-                    label_maps[scale_idx][anch_idx_in_scale, cy, cx, 5:] = torch.tensor(obj_vec)
-                    is_scale_occupied[scale_idx] = True                             ## the best-fitted anchor has been picked in this scale
+        #         if not is_cell_occupied and not is_scale_occupied[scale_idx]:       ## if there is no other overlapping-liked bbox and I'm the best
+        #             label_maps[scale_idx][anch_idx_in_scale, cy, cx, 4:5] = 1.
+        #             label_maps[scale_idx][anch_idx_in_scale, cy, cx, 0:4] = torch.tensor(gtBBOX).float()
+        #             label_maps[scale_idx][anch_idx_in_scale, cy, cx, 5:] = torch.tensor(obj_vec)
+        #             is_scale_occupied[scale_idx] = True                             ## the best-fitted anchor has been picked in this scale
                 
-                elif wh_IOUs[anchor_index] > 0.5:
-                    label_maps[scale_idx][anch_idx_in_scale, cy, cx, 4:5] = -1        ## this anchor is not the best, so we will ignore it
+        #         elif wh_IOUs[anchor_index] > 0.5:
+        #             label_maps[scale_idx][anch_idx_in_scale, cy, cx, 4] = -1        ## this anchor is not the best, so we will ignore it
 
-        return img_file, label_maps, img_path
+        label_maps = create_label_map(labels, self.model_option)
+
+        return img_file, labels, img_path, label_maps
 
 
     def __len__(self):
@@ -152,28 +154,38 @@ class YoloDataset(Dataset):
 
 def collate_fn(batch):
         img_files = []
-        labels_1 = []
-        labels_2 = []
-        labels_3 = []
+        labels = []
         img_paths = []
+        maps_0 = []
+        maps_1 = []
+        maps_2 = []
 
         for b in batch:
             img_files.append(b[0])
-
-            labels_1.append(b[1][0])
-            labels_2.append(b[1][1])
-            labels_3.append(b[1][2])
-
+            labels.append(b[1])
             img_paths.append(b[2])
 
+            maps_0.append(b[3][0])
+            maps_1.append(b[3][1])
+            maps_2.append(b[3][2])
+
         img_files = torch.stack(img_files, 0)
+        labels = torch.tensor(labels)
 
-        labels_1 = torch.stack(labels_1, 0)
-        labels_2 = torch.stack(labels_2, 0)
-        labels_3 = torch.stack(labels_3, 0)
-        img_labels = [labels_1, labels_2, labels_3]
+        maps_0 = torch.stack(maps_0, 0)
+        maps_1 = torch.stack(maps_1, 0)
+        maps_2 = torch.stack(maps_2, 0)
+        label_maps = [maps_0, maps_1, maps_2]
 
-        return img_files, img_labels, img_paths
+        batch_input = {
+            "img": img_files,
+            "label": labels,
+            "img_path": img_paths,
+            "label_map": label_maps
+        }
+
+        # return img_files, img_labels, img_paths
+        return batch_input
 
 
 def build_DataLoader(dataset_opt, model_opt, optim_opt):

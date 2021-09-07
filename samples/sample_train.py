@@ -6,9 +6,10 @@ import sys
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 from common.parser import yaml_parser
 from common.recoder import save_checkpoint
+from common.utils import NMS
 from data.yolo_dataset import build_DataLoader
-from model.MyYOLOv3 import YOLOv3Loss
-from model.darknet2pytorch import DarknetParser
+from model.loss import YOLOv3Loss
+from model.model import Darknet4YOLOv3
 
 import torch
 import torch.nn
@@ -41,9 +42,9 @@ def train(
         ##  FORWARDING ##
         #################
         pred = model(batch_img)                                                       ### batch_img: tensor(   N, 3, 608, 608) . . . . . . . . . . . N = batch_size
-        loss = ( loss_func(pred[2], batch_label[0], scales[0], anchors=anchors[0])    ######## pred: tensor(3, N, 3, S, S, 1 + 4 + class_offset) . . S = scale_size
+        loss = ( loss_func(pred[0], batch_label[0], scales[0], anchors=anchors[0])    ######## pred: tensor(3, N, 3, S, S, 1 + 4 + class_offset) . . S = scale_size
                + loss_func(pred[1], batch_label[1], scales[1], anchors=anchors[1])    # batch_label: tensor(3, N, 3, S, S, 1 + 4 + class_offset)
-               + loss_func(pred[0], batch_label[2], scales[2], anchors=anchors[2]) )  ##### anchors: tensor(3,    3,       2) . . . is list of pairs(anch_w, anch_h)
+               + loss_func(pred[2], batch_label[2], scales[2], anchors=anchors[2]) )  ##### anchors: tensor(3,    3,       2) . . . is list of pairs(anch_w, anch_h)
         loss /= 3
 
         logger.add_scalar('train/loss', loss.item(), n_iteration)
@@ -71,24 +72,27 @@ def valid(
     true_pred_num = 0
     gt_num = 0
 
-    # scales = torch.tensor(model_option["YOLOv3"]["SCALES"]).to(device)       ## [19, 38, 76]
-    # anchors = torch.tensor(model_option["YOLOv3"]["ANCHORS"]).to(device)
+    scales = torch.tensor(model_option["YOLOv3"]["SCALES"]).to(device)       ## [19, 38, 76]
+    anchors = torch.tensor(model_option["YOLOv3"]["ANCHORS"]).to(device)
 
     for i, (batch_img, batch_label, batch_img_path) in enumerate(tqdm(valid_loader, desc="valid")):
         batch_img = batch_img.to(device)
-        batch_label = batch_label.to(device)
+        batch_label = [label.to(device) for label in batch_label]
+        batch_size = len(batch_img_path)
         
         pred = model(batch_img)
+        surpressed_pred = NMS(pred, batch_size)
 
-        ## Post-Processing?
-        ## https://nrsyed.com/2020/04/28/a-pytorch-implementation-of-yolov3-for-real-time-object-detection-part-1/
-
+        ## Get the number of both true predictions and ground truth
+        # for s_pred, label in zip(surpressed_pred, batch_label):
+        #     gt_num += batch_label.shape[0]
+        
 
         ## Get the number of both true predictions and ground truth
 
 
     ## Examine Accuracy
-    acc = (true_pred_num / gt_num + 1e-16) * 100
+    acc = (true_pred_num / (gt_num + 1e-16)) * 100
     logger.add_scalar('test/acc', acc, epoch)
 
     return acc
@@ -97,8 +101,8 @@ def valid(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--config", type=str, default="../configs/darknet/yolov4.cfg")
-    parser.add_argument("--weight", type=str, default="../configs/darknet/yolov4.weights")
+    parser.add_argument("--config", type=str, default="../configs/model/yolov3.cfg")
+    # parser.add_argument("--weight", type=str, default="../configs/darknet/yolov4.weights")
 
     parser.add_argument("--dataset", type=str, default="../configs/dataset/yolo_dataset.yml")
     parser.add_argument("--model", type=str, default="../configs/model/yolo_model.yml")
@@ -124,7 +128,7 @@ if __name__ == "__main__":
     ## BUILD MODEL & LOSS_fn ##
     ###########################
     # model = DarknetParser(args.config, args.weight)
-    model = DarknetParser(args.config, args.weight).to(device)
+    model = Darknet4YOLOv3(args.config).to(device)
     model = torch.nn.DataParallel(model)
     loss_function = YOLOv3Loss()
 
