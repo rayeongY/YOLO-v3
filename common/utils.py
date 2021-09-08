@@ -1,5 +1,5 @@
-
 import torch
+
 
 ## Calculate the IOU values based on width and height of boxes
 ## . . . PARAMETERS: tensor(..., 2), tensor(..., 2)
@@ -118,7 +118,7 @@ def create_label_map(labels, model_option):
         ## . . . . . => Calculate "width-and-height-based IOU" between anchBOX and gtBBOX
         ## . . . . . => Pick the anchBOX in descending order with whIOU value
         anchors_wh = torch.tensor(anchors).reshape(-1, 2)         ## (3, 3, 2) -> (9, 2)
-        gtBBOX_wh = torch.tensor(gtBBOX[2:4])
+        gtBBOX_wh = torch.log(torch.tensor(gtBBOX[2:4]))
         wh_IOUs = width_height_IOU(anchors_wh, gtBBOX_wh)         ## https://github.com/aladdinpersson/Machine-Learning-Collection/blob/master/ML/Pytorch/object_detection/YOLOv3/dataset.py#:~:text=iou_anchors%20%3D%20iou(torch.tensor(box%5B2%3A4%5D)%2C%20self.anchors)
                                                                     ## https://github.com/developer0hye/YOLOv3Tiny/blob/c918fdba0181f5b21edb99bf42de211f69aad254/model.py#:~:text=iou%20%3D%20compute_iou(anchor_boxes%2C%20target_bbox%5B%3A%2C%203%3A%5D%2C%20bbox_format%3D%22wh%22)
 
@@ -156,3 +156,45 @@ def create_label_map(labels, model_option):
                 label_maps[scale_idx][anch_idx_in_scale, cy, cx, 4] = -1        ## this anchor is not the best, so we will ignore it
 
     return label_maps
+
+
+
+def compress_label_map(label_map, anchors, scales):
+    maps = []
+
+    device = label_map[0].device
+    ## label_map: tensor([3, BATCH_SIZE, 3, scale, scale, 85])
+    ##         -> tensor([BATCH_SIZE, #ofObj, 6])
+    for i in range(scales.shape[0]):
+        scale = scales[i].to(device)
+        anchor = anchors[i].to(device)
+        l_map = label_map[i].to(device)
+
+        ## Following codes are for the denormalization of BBOX coord
+        ## https://nrsyed.com/2020/04/28/a-pytorch-implementation-of-yolov3-for-real-time-object-detection-part-1/#:~:text=The%20x/y%20center%20of%20the%20bounding%20box%20with%20respect%20to%20the%20image%20origin%20is%20obtained%20by%20adding%20the%20offset%20of%20the%20cell%20origin%20from%20the%20image%20origin%2C%20given%20by%20cx%20and%20cy%2C%20to%20the%20offset%20of%20the%20bounding%20box%20center%20from%20the%20cell%20origin.
+        x_cell_offset = torch.arange(scale).repeat(1, 3, scale, 1).unsqueeze(-1).to(device)          ## https://github.com/aladdinpersson/Machine-Learning-Collection/blob/ac5dcd03a40a08a8af7e1a67ade37f28cf88db43/ML/Pytorch/object_detection/YOLOv3/utils.py#:~:text=predictions%5B...%2C%205%3A6%5D-,cell_indices%20%3D%20(,),-x%20%3D%201%20/%20S
+        y_cell_offset = x_cell_offset.permute(0, 1, 3, 2, 4).to(device)
+
+        pred_x = (torch.sigmoid(l_map[..., 0:1]) + x_cell_offset) * (608 // scale)
+        pred_y = (torch.sigmoid(l_map[..., 1:2]) + y_cell_offset) * (608 // scale)
+        pred_wh = torch.exp(l_map[..., 2:4]) * anchor.unsqueeze(0).unsqueeze(0).reshape((1, 3, 1, 1, 2))
+        pred_confi = l_map[..., 4:5]
+        pred_obj = torch.argmax(l_map[..., 5:], dim=-1).unsqueeze(-1)
+
+        ## x: tensor(BATCH_SIZE, 3, scale, scale, 6)
+        label = torch.cat((pred_x, pred_y, pred_wh, pred_confi, pred_obj), dim=-1)
+        ## x: tensor(BATCH_SIZE, 3 * scale * scale, 6)
+        label = label.reshape(-1, 3 * scale * scale, label.shape[-1])
+        maps.append(label)
+
+    labels = []
+    batch_size = maps[0].shape[0]
+    for j in range(batch_size):
+        ## label: tensor([22743, 6])
+        label = torch.cat([maps[0][j], maps[1][j], maps[2][j]])
+
+        is_obj = label[:, 4] == 1
+        label = label[is_obj]
+        labels.append(label)
+
+    return labels
