@@ -303,8 +303,8 @@ class YOLOLayer(nn.Module):
             x_cell_offset = torch.arange(scale).repeat(1, 3, scale, 1).unsqueeze(-1).to(device)          ## https://github.com/aladdinpersson/Machine-Learning-Collection/blob/ac5dcd03a40a08a8af7e1a67ade37f28cf88db43/ML/Pytorch/object_detection/YOLOv3/utils.py#:~:text=predictions%5B...%2C%205%3A6%5D-,cell_indices%20%3D%20(,),-x%20%3D%201%20/%20S
             y_cell_offset = x_cell_offset.permute(0, 1, 3, 2, 4).to(device)
 
-            pred_x = torch.sigmoid(x[..., 0:1]) + x_cell_offset
-            pred_y = torch.sigmoid(x[..., 1:2]) + y_cell_offset
+            pred_x = (torch.sigmoid(x[..., 0:1]) + x_cell_offset) * (608 // scale)
+            pred_y = (torch.sigmoid(x[..., 1:2]) + y_cell_offset) * (608 // scale)
             pred_wh = torch.exp(x[..., 2:4]) * anchors.unsqueeze(0).unsqueeze(0).reshape((1, 3, 1, 1, 2))
             pred_confi = torch.sigmoid(x[..., 4:5])
             pred_obj = torch.argmax(x[..., 5:], dim=-1).unsqueeze(-1)
