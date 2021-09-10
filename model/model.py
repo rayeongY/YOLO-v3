@@ -303,8 +303,8 @@ class YOLOLayer(nn.Module):
             x_cell_offset = torch.arange(scale).repeat(1, 3, scale, 1).unsqueeze(-1).to(device)          ## https://github.com/aladdinpersson/Machine-Learning-Collection/blob/ac5dcd03a40a08a8af7e1a67ade37f28cf88db43/ML/Pytorch/object_detection/YOLOv3/utils.py#:~:text=predictions%5B...%2C%205%3A6%5D-,cell_indices%20%3D%20(,),-x%20%3D%201%20/%20S
             y_cell_offset = x_cell_offset.permute(0, 1, 3, 2, 4).to(device)
 
-            pred_x = (torch.sigmoid(x[..., 0:1]) + x_cell_offset) * (608 // scale)
-            pred_y = (torch.sigmoid(x[..., 1:2]) + y_cell_offset) * (608 // scale)
+            pred_x = ((torch.sigmoid(x[..., 0:1]) + x_cell_offset) / scale) * 608
+            pred_y = ((torch.sigmoid(x[..., 1:2]) + y_cell_offset) / scale) * 608
             pred_wh = torch.exp(x[..., 2:4]) * anchors.unsqueeze(0).unsqueeze(0).reshape((1, 3, 1, 1, 2))
             pred_confi = torch.sigmoid(x[..., 4:5])
             pred_obj = torch.argmax(x[..., 5:], dim=-1).unsqueeze(-1)
@@ -312,7 +312,7 @@ class YOLOLayer(nn.Module):
             ## x: tensor(BATCH_SIZE, 3, scale, scale, 6)
             x = torch.cat((pred_x, pred_y, pred_wh, pred_confi, pred_obj), dim=-1)
             ## x: tensor(BATCH_SIZE, 3 * scale * scale, 6)
-            x = x.reshape(-1, x.shape[-1])
+            x = x.reshape(x.shape[0], -1, x.shape[-1])
 
             output = x
 

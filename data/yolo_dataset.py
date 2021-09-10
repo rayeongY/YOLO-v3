@@ -99,7 +99,6 @@ def collate_fn(batch):
             maps_2.append(b[3][2])
 
         img_files = torch.stack(img_files, 0)
-        labels = torch.tensor(labels)
 
         maps_0 = torch.stack(maps_0, 0)
         maps_1 = torch.stack(maps_1, 0)

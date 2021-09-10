@@ -1,4 +1,5 @@
 import torch
+import torchvision
 
 
 ## Calculate the IOU values based on width and height of boxes
@@ -32,8 +33,8 @@ def coord_IOU(box_1, box_2, opt="center"):
         x_right  = torch.min(box_1[..., 0:1] + box_1[..., 2:3], box_2[..., 0:1] + box_1[..., 2:3])
         y_top    = torch.min(box_1[..., 1:2] + box_1[..., 3:4], box_2[..., 1:2] + box_1[..., 3:4])
 
-    inter_w = (x_right - x_left)
-    inter_h = (y_top - y_bottom)
+    inter_w = (x_right - x_left).clamp(0)
+    inter_h = (y_top - y_bottom).clamp(0)
 
     box_1_area = box_1[..., 2:3] * box_1[..., 3:4]
     box_2_area = box_2[..., 2:3] * box_2[..., 3:4]
@@ -41,46 +42,50 @@ def coord_IOU(box_1, box_2, opt="center"):
     i = inter_w * inter_h
     u = box_1_area + box_2_area - i
     
-    iou = i / u
+    iou = i / (u + 1e-16)
     return iou
 
-def NMS(pred, batch_size):
+
+# def box_iou(box_1, box_2)
+
+
+def NMS(pred, thresh=0.5):
     surpressed_pred = []
 
-    for batch_idx in range(batch_size):
-        each_pred = [pred[0][batch_idx], pred[1][batch_idx], pred[2][batch_idx]]        ## [tensor(255, 76, 76), tensor(255, 38, 38), tensor(255, 19, 19)]
-
-        # for i in range(3):
-        #     each_pred[i] = each_pred[i].reshape(-1, each_pred[i].shape[-1])            
-        each_pred = torch.cat(each_pred, dim=0)        ## pred = tensor(22743, 6)
+    for each_pred in pred:
         
-        is_object = each_pred[..., 4] > 0.15      ## 0.15: nominal probability threshold --- https://nrsyed.com/2020/04/28/a-pytorch-implementation-of-yolov3-for-real-time-object-detection-part-1/#:~:text=By%20filtering%20out%20detections%20below%20some%20nominal%20probability%20threshold%20(e.g.%2C%200.15)%2C%20we%20eliminate%20most%20of%20the%20false%20positives.
-        candis = each_pred[is_object]     ## get the only row vectors that are not the false positive
+        bboxes = each_pred.tolist()
+        bboxes = [box for box in bboxes if box[4] > 0.15]
 
-        candis_indices = torch.argsort(candis[..., 4], descending=True)
-        candis = candis[candis_indices]
 
-        elected_preds = []
-        ## until there is no more duplicated bboxes
-        while candis.shape[0] > 0:
-            candi  = candis[0:1]
-            others = candis[1: ]
-        
-            reshaped_candi = candi.repeat(others.shape[0], 1)
-            coord_IOUs = coord_IOU(reshaped_candi, others)
-        
-            non_duplicated = coord_IOUs[..., 0] < 0.5
-            candis = others[non_duplicated]
-            elected_preds.append(candi)
-            # print(f"# of candis: {candis.shape[0]}")
-                        
-        if len(elected_preds) != 0:
-            elected_preds = torch.cat(tuple(elected_preds), dim=0)
-        else:
-            elected_preds = torch.tensor(elected_preds)
-        surpressed_pred.append(elected_preds)
+        bboxes = change_format(torch.tensor(bboxes), "centor")
+        indices = torchvision.ops.nms(bboxes[..., 0:4], bboxes[..., 4], iou_threshold=thresh)
+        bboxes = change_format(bboxes[indices], "corner")
+        surpressed_pred.append(bboxes)
 
     return surpressed_pred
+
+        
+def change_format(bboxes, opt):
+
+    if opt == "centor":
+        x1 = bboxes[..., 0:1] - bboxes[..., 2:3] / 2
+        y1 = bboxes[..., 1:2] - bboxes[..., 3:4] / 2
+        x2 = bboxes[..., 0:1] + bboxes[..., 2:3] / 2
+        y2 = bboxes[..., 1:2] + bboxes[..., 3:4] / 2
+
+        bboxes = torch.cat([x1, y1, x2, y2, bboxes[..., 4:]], dim=-1)
+
+    elif opt == "corner":
+        w = bboxes[..., 2:3] - bboxes[..., 0:1]
+        h = bboxes[..., 3:4] - bboxes[..., 1:2]
+        cx = bboxes[..., 0:1] + w / 2
+        cy = bboxes[..., 1:2] + h / 2
+
+        bboxes = torch.cat([cx, cy, w, h, bboxes[..., 4:]], dim=-1)
+
+
+    return bboxes
 
 
 def create_label_map(labels, model_option):
@@ -98,7 +103,7 @@ def create_label_map(labels, model_option):
     label_maps = [torch.zeros((num_anchors // 3, scale, scale, 5 + class_offset)) for scale in scales]
     for label in labels:
         obj_ids, gtBBOX = label[0], label[1:5]
-        bx, by, bw, bh = gtBBOX
+        x, y, w, h = gtBBOX
         
         ## (2) Create one-hot vector with list of object ids
         obj_vec = [0.] * class_offset
@@ -118,7 +123,7 @@ def create_label_map(labels, model_option):
         ## . . . . . => Calculate "width-and-height-based IOU" between anchBOX and gtBBOX
         ## . . . . . => Pick the anchBOX in descending order with whIOU value
         anchors_wh = torch.tensor(anchors).reshape(-1, 2)         ## (3, 3, 2) -> (9, 2)
-        gtBBOX_wh = torch.log(torch.tensor(gtBBOX[2:4]))
+        gtBBOX_wh = torch.tensor(gtBBOX[2:4]) * 608
         wh_IOUs = width_height_IOU(anchors_wh, gtBBOX_wh)         ## https://github.com/aladdinpersson/Machine-Learning-Collection/blob/master/ML/Pytorch/object_detection/YOLOv3/dataset.py#:~:text=iou_anchors%20%3D%20iou(torch.tensor(box%5B2%3A4%5D)%2C%20self.anchors)
                                                                     ## https://github.com/developer0hye/YOLOv3Tiny/blob/c918fdba0181f5b21edb99bf42de211f69aad254/model.py#:~:text=iou%20%3D%20compute_iou(anchor_boxes%2C%20target_bbox%5B%3A%2C%203%3A%5D%2C%20bbox_format%3D%22wh%22)
 
@@ -136,11 +141,21 @@ def create_label_map(labels, model_option):
 
             ## . . (2) then, Get cell information(Si: cy, Sj: cx) of the g.t.BBOX
             scale = scales[scale_idx]
-            cx = int(bx * scale)          ## .....??
-            cy = int(by * scale)
-            gt_tx = bx * scale - cx
-            gt_ty = by * scale - cy
-            gtBBOX[0:2] = gt_tx, gt_ty
+            cx = int(x * scale)          ## .....??
+            cy = int(y * scale)
+            gt_bx = x * scale - cx
+            gt_by = y * scale - cy
+            gt_bw = w * scale
+            gt_bh = h * scale
+
+            if cx == scale:
+                cx = scale - 1
+                gt_bx = 1 - 1e-16
+            if cy == scale:
+                cy = scale - 1
+                gt_by = 1 - 1e-16
+                
+            gtBBOX = [gt_bx, gt_by, gt_bw, gt_bh]
 
             ## Get record of the cell information in the scale
             ## . . to avoid overlapping bboxes
@@ -158,43 +173,64 @@ def create_label_map(labels, model_option):
     return label_maps
 
 
+def scale_label(labels, img_size, device):
+    
+    scaled_labels = []
+    
+    for i in range(len(labels)):
+        label = labels[i]
 
-def compress_label_map(label_map, anchors, scales):
-    maps = []
+        id = int(label[0])
+        cx = label[1] * img_size
+        cy = label[2] * img_size
+        w = label[3] * img_size
+        h = label[4] * img_size
 
-    device = label_map[0].device
-    ## label_map: tensor([3, BATCH_SIZE, 3, scale, scale, 85])
-    ##         -> tensor([BATCH_SIZE, #ofObj, 6])
-    for i in range(scales.shape[0]):
-        scale = scales[i].to(device)
-        anchor = anchors[i].to(device)
-        l_map = label_map[i].to(device)
+        label = [cx, cy, w, h, 1, id]
+        scaled_labels.append(label)
 
-        ## Following codes are for the denormalization of BBOX coord
-        ## https://nrsyed.com/2020/04/28/a-pytorch-implementation-of-yolov3-for-real-time-object-detection-part-1/#:~:text=The%20x/y%20center%20of%20the%20bounding%20box%20with%20respect%20to%20the%20image%20origin%20is%20obtained%20by%20adding%20the%20offset%20of%20the%20cell%20origin%20from%20the%20image%20origin%2C%20given%20by%20cx%20and%20cy%2C%20to%20the%20offset%20of%20the%20bounding%20box%20center%20from%20the%20cell%20origin.
-        x_cell_offset = torch.arange(scale).repeat(1, 3, scale, 1).unsqueeze(-1).to(device)          ## https://github.com/aladdinpersson/Machine-Learning-Collection/blob/ac5dcd03a40a08a8af7e1a67ade37f28cf88db43/ML/Pytorch/object_detection/YOLOv3/utils.py#:~:text=predictions%5B...%2C%205%3A6%5D-,cell_indices%20%3D%20(,),-x%20%3D%201%20/%20S
-        y_cell_offset = x_cell_offset.permute(0, 1, 3, 2, 4).to(device)
+    scaled_labels = torch.tensor(scaled_labels).to(device)
 
-        pred_x = (torch.sigmoid(l_map[..., 0:1]) + x_cell_offset) * (608 // scale)
-        pred_y = (torch.sigmoid(l_map[..., 1:2]) + y_cell_offset) * (608 // scale)
-        pred_wh = torch.exp(l_map[..., 2:4]) * anchor.unsqueeze(0).unsqueeze(0).reshape((1, 3, 1, 1, 2))
-        pred_confi = l_map[..., 4:5]
-        pred_obj = torch.argmax(l_map[..., 5:], dim=-1).unsqueeze(-1)
+    return scaled_labels
 
-        ## x: tensor(BATCH_SIZE, 3, scale, scale, 6)
-        label = torch.cat((pred_x, pred_y, pred_wh, pred_confi, pred_obj), dim=-1)
-        ## x: tensor(BATCH_SIZE, 3 * scale * scale, 6)
-        label = label.reshape(-1, 3 * scale * scale, label.shape[-1])
-        maps.append(label)
 
-    labels = []
-    batch_size = maps[0].shape[0]
-    for j in range(batch_size):
-        ## label: tensor([22743, 6])
-        label = torch.cat([maps[0][j], maps[1][j], maps[2][j]])
 
-        is_obj = label[:, 4] == 1
-        label = label[is_obj]
-        labels.append(label)
+# def compress_label_map(label_map, anchors, scales):
+#     maps = []
 
-    return labels
+#     device = label_map[0].device
+#     ## label_map: tensor([3, BATCH_SIZE, 3, scale, scale, 85])
+#     ##         -> tensor([BATCH_SIZE, #ofObj, 6])
+#     for i in range(scales.shape[0]):
+#         scale = scales[i].to(device)
+#         anchor = anchors[i].to(device)
+#         l_map = label_map[i].to(device)
+
+#         ## Following codes are for the denormalization of BBOX coord
+#         ## https://nrsyed.com/2020/04/28/a-pytorch-implementation-of-yolov3-for-real-time-object-detection-part-1/#:~:text=The%20x/y%20center%20of%20the%20bounding%20box%20with%20respect%20to%20the%20image%20origin%20is%20obtained%20by%20adding%20the%20offset%20of%20the%20cell%20origin%20from%20the%20image%20origin%2C%20given%20by%20cx%20and%20cy%2C%20to%20the%20offset%20of%20the%20bounding%20box%20center%20from%20the%20cell%20origin.
+#         x_cell_offset = torch.arange(scale).repeat(1, 3, scale, 1).unsqueeze(-1).to(device)          ## https://github.com/aladdinpersson/Machine-Learning-Collection/blob/ac5dcd03a40a08a8af7e1a67ade37f28cf88db43/ML/Pytorch/object_detection/YOLOv3/utils.py#:~:text=predictions%5B...%2C%205%3A6%5D-,cell_indices%20%3D%20(,),-x%20%3D%201%20/%20S
+#         y_cell_offset = x_cell_offset.permute(0, 1, 3, 2, 4).to(device)
+
+#         pred_x = (torch.sigmoid(l_map[..., 0:1]) + x_cell_offset) * (608 // scale)
+#         pred_y = (torch.sigmoid(l_map[..., 1:2]) + y_cell_offset) * (608 // scale)
+#         pred_wh = torch.exp(l_map[..., 2:4]) * anchor.unsqueeze(0).unsqueeze(0).reshape((1, 3, 1, 1, 2))
+#         pred_confi = l_map[..., 4:5]
+#         pred_obj = torch.argmax(l_map[..., 5:], dim=-1).unsqueeze(-1)
+
+#         ## x: tensor(BATCH_SIZE, 3, scale, scale, 6)
+#         label = torch.cat((pred_x, pred_y, pred_wh, pred_confi, pred_obj), dim=-1)
+#         ## x: tensor(BATCH_SIZE, 3 * scale * scale, 6)
+#         label = label.reshape(-1, 3 * scale * scale, label.shape[-1])
+#         maps.append(label)
+
+#     labels = []
+#     batch_size = maps[0].shape[0]
+#     for j in range(batch_size):
+#         ## label: tensor([22743, 6])
+#         label = torch.cat([maps[0][j], maps[1][j], maps[2][j]])
+
+#         is_obj = label[:, 4] == 1
+#         label = label[is_obj]
+#         labels.append(label)
+
+#     return labels

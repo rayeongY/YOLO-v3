@@ -2,6 +2,8 @@ import os
 import copy
 from collections import defaultdict
 
+from common.utils import NMS, scale_label
+
 import torch
 import torchvision
 from pycocotools.coco import COCO
@@ -39,6 +41,7 @@ class CocoEval:
         target: batch_input (shape: (3, BATCH_SIZE, 3 * scale * scale, 6))
         pred: model output (eval)
         """
+        scales = [19, 38, 76]
 
         for _ in range(10):
             if isinstance(target, torchvision.datasets.CocoDetection):
@@ -51,24 +54,23 @@ class CocoEval:
             #     self.cocogt.dataset[attr].append(target.coco.dataset[attr])
     
         batch_img = target["img"]
-        batch_labels = target["label_map"]
+        batch_labels = target["label"]
         batch_img_path = target["img_path"]
         batch_size = len(batch_img_path)
 
         for img_idx in range(batch_size):
-            ####################
-            ## target to coco ##
-            ####################
+
+            img = batch_img[img_idx]
             img_path = batch_img_path[img_idx]
             img_id = os.path.splitext(img_path)[0].split('/')[-1]  ## e.g. "daecheon_20201113_0000_011"
 
-            labels = batch_labels[img_idx]
-            pred = torch.cat([preds[0][img_idx], preds[1][img_idx], preds[2][img_idx]]).reshape(-1, 6)
+            labels = scale_label(batch_labels[img_idx], img.shape[-1], img.device)
+            pred = NMS([preds[0][img_idx], preds[1][img_idx], preds[2][img_idx]])
 
-            self.add_anns(img_id, labels, opt="gt")
-            self.add_anns(img_id, pred,   opt="dt")
-
-            img = batch_img[img_idx]
+            self.add_anns(img_id, labels,  opt="gt")
+            self.add_anns(img_id, pred[0], opt="dt")
+            self.add_anns(img_id, pred[1], opt="dt")
+            self.add_anns(img_id, pred[2], opt="dt")
 
             img_dict = {}
             img_dict['id'] = img_id
@@ -81,6 +83,8 @@ class CocoEval:
 
     
     def add_anns(self, img_id, x, opt="gt"):
+        if torch.numel(x) == 0:             ## if there is no g.t. object
+            return
 
         bboxes = x[:, 0:4]
         bboxes[:, 0:2] = bboxes[:, 0:2] - (bboxes[:, 2:4] / 2)
@@ -116,7 +120,7 @@ class CocoEval:
                 x2 = round(bbox[0] + bbox[2], 4)
                 y1 = round(bbox[1], 4)
                 y2 = round(bbox[1] + bbox[3], 4)
-                ann['segmantation'] = [[x1, y1, x1, y2, x2, y2, x2, y1]]
+                ann['segmantation'] = [[x1, y1, x1, y2, x2, y2, x2, y1]]    ## https://github.com/cocodataset/cocoapi/blob/master/PythonAPI/pycocotools/coco.py#:~:text=if%20not%20%27segmentation,y2%2C%20x2%2C%20y1%5D%5D
 
                 self.cocodt.dataset['annotations'].append(ann)
                 self.dt_ann_id += 1
@@ -125,7 +129,7 @@ class CocoEval:
 
     def eval(self):
         categories = self.cocogt.dataset['categories']
-        categories = [{'id': int(i)} for i in sorted(categories)]
+        categories = [{'id': i} for i in sorted(categories)]
         self.cocogt.dataset['categories'] = copy.deepcopy(categories)
         self.cocodt.dataset['categories'] = copy.deepcopy(categories)
 
