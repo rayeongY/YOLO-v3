@@ -36,9 +36,10 @@ class YOLOv3Loss(nn.Module):
 
         ## Before indexing, do inverting the prediction equations to the whole coordinates:(x, y, w, h) vectors
         anchors = anchors.unsqueeze(0).unsqueeze(0).reshape((1, 3, 1, 1, 2))
-        scaled_pred =   torch.cat([torch.sigmoid(pred[..., :2]), torch.exp(pred[..., 2:4]) * anchors, pred[..., 4:5]], dim=-1)
+        scaled_pred = torch.cat([torch.sigmoid(pred[..., :2]), torch.exp(pred[..., 2:4]) * anchors, pred[..., 4:5]], dim=-1)
+        scaled_target = torch.cat([          target[..., :2],          target[..., 2:4]  * scale, target[..., 4:5]], dim=-1)
         
-        is_obj_loss = self.get_loss(   scaled_pred[is_assigned], target[..., 0:5][is_assigned], opt="IS_OBJ")
+        is_obj_loss = self.get_loss(   scaled_pred[is_assigned],    scaled_target[is_assigned], opt="IS_OBJ")
         coord_loss =  self.get_loss(pred[..., 0:4][is_assigned], target[..., 0:4][is_assigned], opt="COORD")
         class_loss =  self.get_loss(pred[..., 5: ][is_assigned], target[..., 5: ][is_assigned], opt="CLASS")
 
@@ -46,7 +47,10 @@ class YOLOv3Loss(nn.Module):
         coord_loss = get_sum(coord_loss)
         class_loss = get_sum(class_loss)
     
-        total_loss = (no_obj_loss + is_obj_loss + coord_loss + class_loss) / 4
+        total_loss = (no_obj_loss
+                    + is_obj_loss
+                    + coord_loss
+                    + class_loss) / 4
 
         logger.add_scalar('train/is_obj_loss', is_obj_loss.item(), n_iter)
         logger.add_scalar('train/coord_loss', coord_loss.item(), n_iter)
@@ -58,7 +62,7 @@ class YOLOv3Loss(nn.Module):
     def get_loss(self, pred, target, opt):
         
         if opt == "NO_OBJ":
-            loss = self.bce(pred, target)
+            loss = self.bce(torch.sigmoid(pred), target)
             return loss
 
         elif opt == "IS_OBJ":

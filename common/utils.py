@@ -46,24 +46,18 @@ def coord_IOU(box_1, box_2, opt="center"):
     return iou
 
 
-# def box_iou(box_1, box_2)
-
 
 def NMS(pred, thresh=0.5):
-    surpressed_pred = []
+    bboxes = pred.tolist()
+    bboxes = [box for box in bboxes if box[4] > 0.15]
 
-    for each_pred in pred:
-        
-        bboxes = each_pred.tolist()
-        bboxes = [box for box in bboxes if box[4] > 0.15]
-
-
-        bboxes = change_format(torch.tensor(bboxes), "centor")
+    bboxes = torch.tensor(bboxes)
+    if bboxes.shape[0] > 0:
+        bboxes = change_format(bboxes, "centor")
         indices = torchvision.ops.nms(bboxes[..., 0:4], bboxes[..., 4], iou_threshold=thresh)
         bboxes = change_format(bboxes[indices], "corner")
-        surpressed_pred.append(bboxes)
 
-    return surpressed_pred
+    return bboxes
 
         
 def change_format(bboxes, opt):
@@ -141,12 +135,12 @@ def create_label_map(labels, model_option):
 
             ## . . (2) then, Get cell information(Si: cy, Sj: cx) of the g.t.BBOX
             scale = scales[scale_idx]
-            cx = int(x * scale)          ## .....??
+            cx = int(x * scale)
             cy = int(y * scale)
             gt_bx = x * scale - cx
             gt_by = y * scale - cy
-            gt_bw = w * scale
-            gt_bh = h * scale
+            gt_bw = w
+            gt_bh = h
 
             if cx == scale:
                 cx = scale - 1
@@ -167,7 +161,7 @@ def create_label_map(labels, model_option):
                 label_maps[scale_idx][anch_idx_in_scale, cy, cx, 5:] = torch.tensor(obj_vec)
                 is_scale_occupied[scale_idx] = True                             ## the best-fitted anchor has been picked in this scale
             
-            elif wh_IOUs[anchor_index] > 0.5:
+            elif not is_cell_occupied and wh_IOUs[anchor_index] > 0.5:
                 label_maps[scale_idx][anch_idx_in_scale, cy, cx, 4] = -1        ## this anchor is not the best, so we will ignore it
 
     return label_maps
@@ -195,42 +189,12 @@ def scale_label(labels, img_size, device):
 
 
 
-# def compress_label_map(label_map, anchors, scales):
-#     maps = []
+## This function is very naive
+## (the probability is ignored that there can exist image files
+##  whose names are same except for region: 0th element in filename)
+def get_image_id(name):
+    id_frags = name.split('_')
 
-#     device = label_map[0].device
-#     ## label_map: tensor([3, BATCH_SIZE, 3, scale, scale, 85])
-#     ##         -> tensor([BATCH_SIZE, #ofObj, 6])
-#     for i in range(scales.shape[0]):
-#         scale = scales[i].to(device)
-#         anchor = anchors[i].to(device)
-#         l_map = label_map[i].to(device)
+    img_id = ''.join(id_frags[1:])
 
-#         ## Following codes are for the denormalization of BBOX coord
-#         ## https://nrsyed.com/2020/04/28/a-pytorch-implementation-of-yolov3-for-real-time-object-detection-part-1/#:~:text=The%20x/y%20center%20of%20the%20bounding%20box%20with%20respect%20to%20the%20image%20origin%20is%20obtained%20by%20adding%20the%20offset%20of%20the%20cell%20origin%20from%20the%20image%20origin%2C%20given%20by%20cx%20and%20cy%2C%20to%20the%20offset%20of%20the%20bounding%20box%20center%20from%20the%20cell%20origin.
-#         x_cell_offset = torch.arange(scale).repeat(1, 3, scale, 1).unsqueeze(-1).to(device)          ## https://github.com/aladdinpersson/Machine-Learning-Collection/blob/ac5dcd03a40a08a8af7e1a67ade37f28cf88db43/ML/Pytorch/object_detection/YOLOv3/utils.py#:~:text=predictions%5B...%2C%205%3A6%5D-,cell_indices%20%3D%20(,),-x%20%3D%201%20/%20S
-#         y_cell_offset = x_cell_offset.permute(0, 1, 3, 2, 4).to(device)
-
-#         pred_x = (torch.sigmoid(l_map[..., 0:1]) + x_cell_offset) * (608 // scale)
-#         pred_y = (torch.sigmoid(l_map[..., 1:2]) + y_cell_offset) * (608 // scale)
-#         pred_wh = torch.exp(l_map[..., 2:4]) * anchor.unsqueeze(0).unsqueeze(0).reshape((1, 3, 1, 1, 2))
-#         pred_confi = l_map[..., 4:5]
-#         pred_obj = torch.argmax(l_map[..., 5:], dim=-1).unsqueeze(-1)
-
-#         ## x: tensor(BATCH_SIZE, 3, scale, scale, 6)
-#         label = torch.cat((pred_x, pred_y, pred_wh, pred_confi, pred_obj), dim=-1)
-#         ## x: tensor(BATCH_SIZE, 3 * scale * scale, 6)
-#         label = label.reshape(-1, 3 * scale * scale, label.shape[-1])
-#         maps.append(label)
-
-#     labels = []
-#     batch_size = maps[0].shape[0]
-#     for j in range(batch_size):
-#         ## label: tensor([22743, 6])
-#         label = torch.cat([maps[0][j], maps[1][j], maps[2][j]])
-
-#         is_obj = label[:, 4] == 1
-#         label = label[is_obj]
-#         labels.append(label)
-
-#     return labels
+    return img_id

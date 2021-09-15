@@ -2,7 +2,7 @@ import os
 import copy
 from collections import defaultdict
 
-from common.utils import NMS, scale_label
+from common.utils import NMS, scale_label, get_image_id
 
 import torch
 import torchvision
@@ -31,6 +31,7 @@ class CocoEval:
             "annotations": []
         }
 
+        self.img_id = 0
         self.gt_ann_id = 1  ## There was an issue: WHY `ann_id` should be initialized to 1 ----- https://github.com/pytorch/vision/issues/1530
         self.dt_ann_id = 1  ## In short, the list of class IDs is used as BOOLEAN values
                             ##        => So if `ann_id` is initialized to 0, then the `0th ID` is interpreted as a NEGATIVE 
@@ -39,9 +40,8 @@ class CocoEval:
     def update(self, target, preds):
         """
         target: batch_input (shape: (3, BATCH_SIZE, 3 * scale * scale, 6))
-        pred: model output (eval)
+        preds: model output (eval)
         """
-        scales = [19, 38, 76]
 
         for _ in range(10):
             if isinstance(target, torchvision.datasets.CocoDetection):
@@ -49,10 +49,7 @@ class CocoEval:
             if isinstance(target, torch.utils.data.Subset):
                 target = target.dataset
 
-        # if isinstance(target, torchvision.datasets.CocoDetection):
-            # for attr in self.coco_attributes:
-            #     self.cocogt.dataset[attr].append(target.coco.dataset[attr])
-    
+
         batch_img = target["img"]
         batch_labels = target["label"]
         batch_img_path = target["img_path"]
@@ -61,16 +58,14 @@ class CocoEval:
         for img_idx in range(batch_size):
 
             img = batch_img[img_idx]
-            img_path = batch_img_path[img_idx]
-            img_id = os.path.splitext(img_path)[0].split('/')[-1]  ## e.g. "daecheon_20201113_0000_011"
+            # img_path = batch_img_path[img_idx]
+            img_id = self.img_id
 
             labels = scale_label(batch_labels[img_idx], img.shape[-1], img.device)
-            pred = NMS([preds[0][img_idx], preds[1][img_idx], preds[2][img_idx]])
+            pred = NMS(torch.cat([preds[0][img_idx], preds[1][img_idx], preds[2][img_idx]]))
 
             self.add_anns(img_id, labels,  opt="gt")
-            self.add_anns(img_id, pred[0], opt="dt")
-            self.add_anns(img_id, pred[1], opt="dt")
-            self.add_anns(img_id, pred[2], opt="dt")
+            self.add_anns(img_id,   pred,  opt="dt")
 
             img_dict = {}
             img_dict['id'] = img_id
@@ -79,11 +74,12 @@ class CocoEval:
 
             self.cocogt.dataset['images'].append(img_dict)
             self.cocodt.dataset['images'].append(img_dict)
+            self.img_id += 1
         
 
     
     def add_anns(self, img_id, x, opt="gt"):
-        if torch.numel(x) == 0:             ## if there is no g.t. object
+        if torch.numel(x) == 0:             ## if there is no object
             return
 
         bboxes = x[:, 0:4]
