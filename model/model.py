@@ -64,7 +64,7 @@ class Darknet4YOLOv3(nn.Module):
             weights = np.fromfile(f, dtype=np.float32)  # The rest are weights
 
         ptr = 0
-        for i, (block, module) in enumerate(zip(self.blocks, self.module_list)):
+        for i, (block, module) in enumerate(zip(self.module_cfgs, self.module_list)):
             if block["type"] == "convolutional":
                 conv_layer = module[0]
                 print(conv_layer)

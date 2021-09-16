@@ -1,3 +1,7 @@
+import os
+import xmltodict
+import json
+
 import torch
 import torchvision
 
@@ -60,6 +64,7 @@ def NMS(pred, thresh=0.5):
     return bboxes
 
         
+
 def change_format(bboxes, opt):
 
     if opt == "centor":
@@ -80,6 +85,7 @@ def change_format(bboxes, opt):
 
 
     return bboxes
+
 
 
 def create_label_map(labels, model_option):
@@ -167,8 +173,12 @@ def create_label_map(labels, model_option):
     return label_maps
 
 
+
+
 def scale_label(labels, img_size, device):
-    
+    '''
+    This function is implemented... to support denormalizing coordinates...
+    '''
     scaled_labels = []
     
     for i in range(len(labels)):
@@ -189,12 +199,27 @@ def scale_label(labels, img_size, device):
 
 
 
-## This function is very naive
-## (the probability is ignored that there can exist image files
-##  whose names are same except for region: 0th element in filename)
-def get_image_id(name):
-    id_frags = name.split('_')
+def get_image_id(img_path):
+    '''
+    This function get image id from given image-path-related xml file.\n
+    If 'image_id' field does not exist, just get only numbers from image file name and join
+    '''
 
-    img_id = ''.join(id_frags[1:])
+    xml_path = os.path.splitext(img_path)[0] + ".xml"
+    
+    with open(xml_path, "r") as xml:
+        config = xml.read().replace("\\ufeff", "")
+        config = xmltodict.parse(config)
+        config = json.loads(json.dumps(config))
+
+        if 'object' in config['annotation']:
+            objs = config['annotation']['object']
+            if isinstance(objs, list):
+                img_id = objs[0]['image_id']
+            elif isinstance(objs, dict):
+                img_id = objs['image_id']
+        else:
+            img_id = os.path.splitext(img_path)[0].split("/")[-1]
+            img_id = ''.join(img_id.split("_")[1:])
 
     return img_id
