@@ -131,14 +131,14 @@ class CocoEval:
 
             obj_id = int(obj_ids[i])
             ann['category_id'] = obj_id
-            if opt == "dt":
-                obj_id = int(obj_ids[i])
-                if obj_id == 8:                           ## https://tech.amikelive.com/node-718/what-object-categories-labels-are-in-coco-dataset/#:~:text=8,vehicle
-                    obj_id = 0
-                elif obj_id == 0:
-                    obj_id = 8
+            # if opt == "dt":
+            #     obj_id = int(obj_ids[i])
+            #     if obj_id == 8:                           ## https://tech.amikelive.com/node-718/what-object-categories-labels-are-in-coco-dataset/#:~:text=8,vehicle
+            #         obj_id = 0
+            #     elif obj_id == 0:
+            #         obj_id = 8
 
-                ann['category_id'] = obj_id
+            #     ann['category_id'] = obj_id
 
             bbox = bboxes[i]
             ann['bbox'] = [round(x, 4) for x in bbox]       ## floating point 4 is based on my own

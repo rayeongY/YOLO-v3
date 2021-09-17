@@ -16,7 +16,7 @@ def width_height_IOU(anchBBox, gtBBox):
     i = min_w * min_h
     u = (anchBBox[..., 0:1] * anchBBox[..., 1:2]) + (gtBBox[..., 0:1] * gtBBox[..., 1:2]) - i
 
-    wh_IOUs = i / (u + 1e-16)
+    wh_IOUs = i / (u + 1e-10)
 
     return wh_IOUs
 
@@ -46,7 +46,7 @@ def coord_IOU(box_1, box_2, opt="center"):
     i = inter_w * inter_h
     u = box_1_area + box_2_area - i
     
-    iou = i / (u + 1e-16)
+    iou = i / (u + 1e-10)
     return iou
 
 
@@ -127,7 +127,8 @@ def create_label_map(labels, model_option):
         wh_IOUs = width_height_IOU(anchors_wh, gtBBOX_wh)         ## https://github.com/aladdinpersson/Machine-Learning-Collection/blob/master/ML/Pytorch/object_detection/YOLOv3/dataset.py#:~:text=iou_anchors%20%3D%20iou(torch.tensor(box%5B2%3A4%5D)%2C%20self.anchors)
                                                                     ## https://github.com/developer0hye/YOLOv3Tiny/blob/c918fdba0181f5b21edb99bf42de211f69aad254/model.py#:~:text=iou%20%3D%20compute_iou(anchor_boxes%2C%20target_bbox%5B%3A%2C%203%3A%5D%2C%20bbox_format%3D%22wh%22)
 
-        anchor_indices = wh_IOUs.argsort(descending=True, dim=0)
+        # anchor_indices = wh_IOUs.argsort(descending=True, dim=0)
+        anchor_indices = torch.argsort(wh_IOUs, descending=True)
 
         ## Flag list for checking whether other anchor has been already picked in the scale
         is_scale_occupied = [False] * 3
@@ -150,16 +151,16 @@ def create_label_map(labels, model_option):
 
             if cx == scale:
                 cx = scale - 1
-                gt_bx = 1 - 1e-16
+                gt_bx = 1 - 1e-10
             if cy == scale:
                 cy = scale - 1
-                gt_by = 1 - 1e-16
+                gt_by = 1 - 1e-10
                 
             gtBBOX = [gt_bx, gt_by, gt_bw, gt_bh]
 
             ## Get record of the cell information in the scale
             ## . . to avoid overlapping bboxes
-            is_cell_occupied = label_maps[scale_idx][anch_idx_in_scale, cy, cx,  4]
+            is_cell_occupied = label_maps[scale_idx][anch_idx_in_scale, cy, cx, 4]
 
             if not is_cell_occupied and not is_scale_occupied[scale_idx]:       ## if there is no other overlapping-liked bbox and I'm the best
                 label_maps[scale_idx][anch_idx_in_scale, cy, cx, 4:5] = 1.

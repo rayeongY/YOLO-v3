@@ -26,7 +26,7 @@ class YoloDataset(Dataset):
                 
         if dataset_name == "yolo-dataset" or dataset_name == "ship":
             if split == "train":
-                dataset_type = "valid"
+                dataset_type = "train"
             elif split == "valid":
                 dataset_type = "valid"
 
